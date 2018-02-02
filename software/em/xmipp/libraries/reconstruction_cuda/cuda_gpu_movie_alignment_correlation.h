@@ -6,5 +6,6 @@ void kernel1(float* imgs, size_t oldX, size_t oldY, int noOfImages, size_t newX,
 //		float*& result);
 
 void kernel3(float maxShift, size_t noOfImgs,
-		const std::complex<float>* imgs, size_t fftXdim, size_t fftYdim, std::complex<float>*& result);
+		const std::complex<float>* imgs, size_t fftXdim, size_t fftYdim,
+		float*& result);
 

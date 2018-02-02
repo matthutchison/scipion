@@ -184,7 +184,7 @@ void kernel4(const float2* __restrict__ imgs, float2* correlations, int xDim, in
 		}
 }
 
-void kernel3(float maxShift, size_t noOfImgs, const std::complex<float>* imgs, size_t fftXdim, size_t fftYdim, std::complex<float>*& result) {
+void kernel3(float maxShift, size_t noOfImgs, const std::complex<float>* imgs, size_t fftXdim, size_t fftYdim, float*& result) {
 
 	size_t noOfCorellations = noOfImgs * (noOfImgs - 1) / 2;
 //	float2* d_b;
@@ -210,8 +210,25 @@ void kernel3(float maxShift, size_t noOfImgs, const std::complex<float>* imgs, s
 	gpuErrchk( cudaPeekAtLastError() );
 
 
-	result = new std::complex<float>[noOfCorrPixels]();
-	cudaMemcpy((void*)result, (void*)d_corrs, noOfCorrPixels*sizeof(float2), cudaMemcpyDeviceToHost);
+// perform IFFT
+	GpuMultidimArrayAtGpu<std::complex<float> > tmp(fftXdim, fftYdim, 1, noOfCorellations, (std::complex<float>*)d_corrs);
+	GpuMultidimArrayAtGpu<float> tmp1(fftYdim, fftYdim, 1, noOfCorellations, (float*)d_corrs);
+	mycufftHandle myhandle;
+	std::cout << "about to do IFFT" << std::endl;
+	tmp.ifft(tmp1, myhandle);
+//	myhandle.clear(); // release unnecessary l || oIndex < 0) {
+	//			printf("problem: %p %p old:%lu %lu new:%lu %lu : i:%lu o:%lu\nyhalf: %d origY %lu thread %d %d \n", src, dest, oldX, oldY, newX, newY, iIndex, oIndex,
+	//					yhalf, origY, idx, idy);
+	//		}memory
+	std::cout << "IFFT done" << std::endl;
+	tmp1.d_data = NULL; // unbind
+	gpuErrchk( cudaPeekAtLastError() );
+	gpuErrchk( cudaDeviceSynchronize() );
+
+
+
+	result = new float[fftYdim*fftYdim*noOfCorellations]();
+	cudaMemcpy((void*)result, (void*)d_corrs, fftYdim*fftYdim*noOfCorellations*sizeof(float), cudaMemcpyDeviceToHost);
 
 	gpuErrchk( cudaDeviceSynchronize() );
 	gpuErrchk( cudaPeekAtLastError() );

@@ -162,7 +162,7 @@ void ProgMovieAlignmentCorrelationGPU::computeShifts(size_t N,
 		const Matrix1D<double>& bX, const Matrix1D<double>& bY,
 		const Matrix2D<double>& A) {
 
-	std::complex<float>* result;
+	float* result;
 	kernel3(maxShift, N, tmpResult, newXdim/2+1, newYdim, result);
 	std::cout << "kernel3 done" << std::endl;
 	size_t framexdim = 4096;
@@ -171,26 +171,30 @@ void ProgMovieAlignmentCorrelationGPU::computeShifts(size_t N,
 
 	size_t newFFTXDim = newXdim/2+1;
 	for (int img = 0; img < (N * (N-1)/2); img++) {
-		MultidimArray<std::complex<double> > V(1, 1, newYdim, newFFTXDim);
-		for (size_t i = 0; i < (newFFTXDim*newYdim); i++) {
-			V.data[i].real() = result[i + img*newYdim*newFFTXDim].real() / (framexdim*frameydim);
-			V.data[i].imag() = result[i + img*newYdim*newFFTXDim].imag() / (framexdim*frameydim);
-		}
-		std::cout << "V done" << std::endl;
-		Image<double> aaa(newFFTXDim, newYdim, 1, 1);
-		for (size_t i = 0; i < (newFFTXDim*newYdim); i++) {
-			double d = result[i + img*newYdim*newFFTXDim].real() / (framexdim*frameydim);
-			if (d < 3) aaa.data[i] = d;
-		}
-		aaa.write("correlationGPU" + SSTR(img) + ".vol");
-		std::cout << "correlation done" << std::endl;
-		Image<double> yyy (newXdim, newYdim, 1, 1);
-		FourierTransformer transformer;
-		std::cout << "about to do IFFT" << std::endl;
-		transformer.inverseFourierTransform(V, yyy.data);
-		std::cout << "IFFT done" << std::endl;
-		CenterFFT(yyy.data, true);
-		yyy.write("correlationIFFTGPU" + SSTR(img) + ".vol");
+//		MultidimArray<std::complex<double> > V(1, 1, newYdim, newFFTXDim);
+//		for (size_t i = 0; i < (newFFTXDim*newYdim); i++) {
+//			V.data[i].real() = result[i + img*newYdim*newFFTXDim].real() / (framexdim*frameydim);
+//			V.data[i].imag() = result[i + img*newYdim*newFFTXDim].imag() / (framexdim*frameydim);
+//		}
+//		std::cout << "V done" << std::endl;
+//		Image<double> aaa(newFFTXDim, newYdim, 1, 1);
+//		for (size_t i = 0; i < (newFFTXDim*newYdim); i++) {
+//			double d = result[i + img*newYdim*newFFTXDim].real() / (framexdim*frameydim);
+//			if (d < 3) aaa.data[i] = d;
+//		}
+//		aaa.write("correlationGPU" + SSTR(img) + ".vol");
+//		std::cout << "correlation done" << std::endl;
+//		Image<double> yyy (newXdim, newYdim, 1, 1);
+//		FourierTransformer transformer;
+//		std::cout << "about to do IFFT" << std::endl;
+//		transformer.inverseFourierTransform(V, yyy.data);
+//		std::cout << "IFFT done" << std::endl;
+//		CenterFFT(yyy.data, true);
+//		yyy.write("correlationIFFTGPU" + SSTR(img) + ".vol");
+		Image<float>tmp(newXdim, newYdim, 1, 1);
+		tmp.data.data = result;
+		CenterFFT(tmp.data, true);
+		tmp.write("correlationIFFTGPU" + SSTR(img) + ".vol");
 	}
 
 
