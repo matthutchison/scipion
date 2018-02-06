@@ -66,9 +66,19 @@ void createPlanFFT(size_t Xdim, size_t Ydim, size_t Ndim, size_t Zdim, bool forw
 	if(forward){
 		gpuErrchkFFT(cufftPlanMany(plan, NRANK, nr, nr, rstride, rdist, nf, fstride, fdist, CUFFT_R2C, Ndim));
 	}else{
+		printf("nr %p %p %p nf %p %p %p\n", nr1, nr2, nr3, nf1, nf2, nf3);
+		printf("%p %d %p %p  dist: %d %d ndim: %d\n",plan, NRANK, nr, nf, fdist, rdist, Ndim);
 		gpuErrchkFFT(cufftPlanMany(plan, NRANK, nr, nf, fstride, fdist, nr, rstride, rdist, CUFFT_C2R, Ndim));
 	}
+	size_t workSize = 0;
+	cufftGetSize(*plan, &workSize);
+	printf("Estimated size: %lu\n", workSize/1048576);
+	fflush(stdout);
 
+}
+
+void createPlanFFT(size_t Xdim, size_t Ydim, size_t Ndim, size_t Zdim, bool forward, mycufftHandle *plan) {
+	createPlanFFT(Xdim, Ydim, Ndim, Zdim, forward, (cufftHandle*)plan->ptr);
 }
 
 

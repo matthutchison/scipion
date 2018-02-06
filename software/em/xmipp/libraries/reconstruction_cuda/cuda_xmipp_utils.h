@@ -13,6 +13,8 @@ void gpuCopyFromCPUToGPU(void* data, void* d_data, size_t Nbytes);
 void gpuCopyFromGPUToCPU(void* d_data, void* data, size_t Nbytes);
 int gridFromBlock(int tasks, int Nthreads);
 
+
+
 class mycufftHandle {
 public:
 	void *ptr;
@@ -21,9 +23,14 @@ public:
 			ptr=NULL;
 	}
 
+	~mycufftHandle() {
+		clear();
+	}
+
 	void clear()
 	{
 		if (ptr!=NULL) {
+			printf("destroying plan %p\n", ptr);
 			mycufftDestroy(ptr);
 		}
 		ptr=NULL;
@@ -31,6 +38,7 @@ public:
 
 
 };
+void createPlanFFT(size_t Xdim, size_t Ydim, size_t Ndim, size_t Zdim, bool forward, mycufftHandle *plan);
 
 class XmippDim3 {
 public:
@@ -98,7 +106,7 @@ public:
 
 		clear();
 		setDims(_Xdim, _Ydim, _Zdim, _Ndim);
-		std::cout << "allocating " << nzyxdim * sizeof(T) / 1048576  << " MB (" << nzyxdim << "x" <<sizeof(T) << ")" <<std::endl;
+		printf("allocating %p of size %lu (%d x %d )\n", d_data, nzyxdim * sizeof(T) / 1048576, nzyxdim, sizeof(T));
         gpuMalloc((void**) &d_data,nzyxdim*sizeof(T));
 
     }
@@ -111,6 +119,7 @@ public:
 	void clear()
 	{
 		if (d_data!=NULL){
+			printf("freeing %p\n", d_data);
 			gpuFree((void*) d_data);
 
 		}

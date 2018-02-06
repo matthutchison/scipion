@@ -28,10 +28,65 @@
 
 // FIXME: REMOVE
 #include <sstream>
+#include <set>
 #include "data/filters.h"
 #include "data/xmipp_fftw.h"
 #define SSTR( x ) static_cast< std::ostringstream & >( \
         ( std::ostringstream() << std::dec << x ) ).str()
+
+const int primes[4] = {2, 3, 5, 7};
+
+int intpow(int x, int p) {
+  if (p == 0) return 1;
+  if (p == 1) return x;
+  return x * intpow(x, p-1);
+}
+
+int findNext2357Multiple(int num) {
+	printf("Computing padding for size %i\n", num);
+
+	int N = num * 2;
+
+	int length = (int) (log2(N) + 0.5) + 1;
+	int primepowers[4][length];
+
+	for (int i = 0; i < 4; i++)
+		for (int j = 1; j < length; j++) {
+			int power = intpow(primes[i], j);
+			if (power < N)
+				primepowers[i][j] = power;
+			else
+				primepowers[i][j] = 1;
+		}
+
+	std::set<int> goodnumbers;
+	for (int a = 0; a < length; a++)
+		for (int b = 0; b < length; b++)
+			for (int c = 0; c < length; c++)
+				for (int d = 0; d < length; d++)
+					/* mask < 2: only 2^a,
+					 mask < 4: 2^a * 3^b
+					 mask < 8: 2^a * 3^b * 5^c
+					 mask < 16: 2^a * 3^b * 5^c * 7^d */
+					for (int mask = 1; mask < 16; mask++) {
+						int mul = ((mask & 1) ? primepowers[0][a] : 1)
+								* ((mask & 2) ? primepowers[1][b] : 1)
+								* ((mask & 4) ? primepowers[2][c] : 1)
+								* ((mask & 8) ? primepowers[3][d] : 1);
+	                        if (mul <= N && mul > 0) /* overflow protection */
+	                            goodnumbers.insert(mul);
+//						if (mul >= num)
+//							return mul;
+					}
+	for (std::set<int>::iterator i = goodnumbers.begin(); i != goodnumbers.end(); i++)
+	        if (*i >= num) return *i;
+
+
+	return 0;
+}
+
+
+
 // FIXME
 
 void ProgMovieAlignmentCorrelationGPU::loadFrame(const MetaData& movie, size_t objId, bool crop, Image<float>& out) {
@@ -58,6 +113,14 @@ void ProgMovieAlignmentCorrelationGPU::loadData(const MetaData& movie,
 	gainF.data.resize(gain());
 	darkF.data.resize(dark());
 
+
+
+	int paddedSize = findNext2357Multiple(newXdim);
+	int padding = paddedSize - newXdim;
+	printf("using padding %d (%d-%d)\n", padding, paddedSize, newXdim);
+
+	newXdim = newYdim = paddedSize; // FIXME
+
 	// FIXME extract
 	Matrix1D<double> w(2);
 	filter.initZeros(newYdim, newXdim/2+1);
@@ -74,11 +137,11 @@ void ProgMovieAlignmentCorrelationGPU::loadData(const MetaData& movie,
 
 	loadFrame(movie, movie.firstObject(), cropInput, frame);
 	int noOfImgs = nlast - nfirst + 1;
-	size_t noOfFloats = noOfImgs * std::max(frame.data.yxdim, (frame.data.xdim/2+1) * frame.data.ydim * 2);
+	int paddedLineLength = (frame.data.xdim/2+1)*2;
+	size_t noOfFloats = noOfImgs * std::max(frame.data.yxdim, paddedLineLength * frame.data.ydim * 2);
 	float* imgs = new float[noOfFloats]();
 	std::cout << "noOfFloats: " << noOfFloats << std::endl;
 	int counter = -1;
-	int paddedLineLength = (frame.data.xdim/2+1)*2;
 	FOR_ALL_OBJECTS_IN_METADATA(movie) {
 		counter++;
 		if (counter < nfirst ) continue;
@@ -113,9 +176,11 @@ void ProgMovieAlignmentCorrelationGPU::loadData(const MetaData& movie,
 //				frame.data.yxdim * sizeof(float));
 	}
 
-	Image<float> aaaa((frame.data.xdim/2+1)*2, frame.data.ydim, 1, noOfImgs);
+	Image<float> aaaa(paddedLineLength, frame.data.ydim, 1, noOfImgs);
 	aaaa.data.data = imgs;
 	aaaa.write("images.vol");
+
+
 
 
 //	float* result;
@@ -162,15 +227,24 @@ void ProgMovieAlignmentCorrelationGPU::computeShifts(size_t N,
 		const Matrix1D<double>& bX, const Matrix1D<double>& bY,
 		const Matrix2D<double>& A) {
 
-	float* result;
-	kernel3(maxShift, N, tmpResult, newXdim/2+1, newYdim, result);
+
+	float* result1;
+	std::complex<float>* result2;
+	kernel3(maxShift, N, tmpResult, newXdim/2+1, newYdim, result1, result2);
 	std::cout << "kernel3 done" << std::endl;
 	size_t framexdim = 4096;
 	size_t frameydim = 4096; // FIXME
 
 
 	size_t newFFTXDim = newXdim/2+1;
-	for (int img = 0; img < (N * (N-1)/2); img++) {
+	int noOfCorrelations = (N * (N-1)/2);
+	Image<float> ffts(newFFTXDim, newYdim, 1, noOfCorrelations);
+	for (size_t i = 0; i < newFFTXDim*newYdim*noOfCorrelations; i++) {
+		double d = result2[i].real() / (framexdim*frameydim*newFFTXDim*newYdim);
+		if (d < 3) ffts.data[i] = d;
+	}
+	ffts.write("correlationsFFTGPU.vol");
+//	for (int img = 0; img < (N * (N-1)/2); img++) {
 //		MultidimArray<std::complex<double> > V(1, 1, newYdim, newFFTXDim);
 //		for (size_t i = 0; i < (newFFTXDim*newYdim); i++) {
 //			V.data[i].real() = result[i + img*newYdim*newFFTXDim].real() / (framexdim*frameydim);
@@ -191,11 +265,11 @@ void ProgMovieAlignmentCorrelationGPU::computeShifts(size_t N,
 //		std::cout << "IFFT done" << std::endl;
 //		CenterFFT(yyy.data, true);
 //		yyy.write("correlationIFFTGPU" + SSTR(img) + ".vol");
-		Image<float>tmp(newXdim, newYdim, 1, 1);
-		tmp.data.data = result;
-		CenterFFT(tmp.data, true);
-		tmp.write("correlationIFFTGPU" + SSTR(img) + ".vol");
-	}
+		Image<float>tmp(newXdim, newYdim, 1, noOfCorrelations);
+		tmp.data.data = result1;
+//		CenterFFT(tmp.data, true);
+		tmp.write("correlationIFFTGPU.vol");
+//	}
 
 
 	return;
