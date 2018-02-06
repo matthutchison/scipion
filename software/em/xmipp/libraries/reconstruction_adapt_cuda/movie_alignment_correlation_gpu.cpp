@@ -241,9 +241,32 @@ void ProgMovieAlignmentCorrelationGPU::computeShifts(size_t N,
 	Image<float> ffts(newFFTXDim, newYdim, 1, noOfCorrelations);
 	for (size_t i = 0; i < newFFTXDim*newYdim*noOfCorrelations; i++) {
 		double d = result2[i].real() / (framexdim*frameydim*newFFTXDim*newYdim);
-		if (d < 3) ffts.data[i] = d;
+		if (std::abs(d) < 3) ffts.data[i] = d;
 	}
-	ffts.write("correlationsFFTGPU.vol");
+	ffts.write("correlationFFTGPU.vol");
+
+	int idx = 0;
+	for (size_t i = 0; i < N - 1; ++i) {
+		for (size_t j = i + 1; j < N; ++j) {
+			MultidimArray<double> Mcorr (newYdim, newXdim);
+			size_t offset = idx * newYdim * newXdim;
+			for (size_t t = 0; t < newYdim * newXdim; t++) {
+				Mcorr.data[t] = result1[offset + t];
+			}
+			CenterFFT(Mcorr, true);
+			Mcorr.setXmippOrigin();
+			bestShift(Mcorr, bX(idx), bY(idx), NULL, maxShift);
+			if (verbose)
+				std::cerr << "Frame " << i + nfirst << " to Frame "
+						<< j + nfirst << " -> (" << bX(idx) << "," << bY(idx)
+						<< ")\n";
+			for (int ij = i; ij < j; ij++)
+				A(idx, ij) = 1;
+
+			idx++;
+		}
+	}
+
 //	for (int img = 0; img < (N * (N-1)/2); img++) {
 //		MultidimArray<std::complex<double> > V(1, 1, newYdim, newFFTXDim);
 //		for (size_t i = 0; i < (newFFTXDim*newYdim); i++) {
@@ -275,24 +298,24 @@ void ProgMovieAlignmentCorrelationGPU::computeShifts(size_t N,
 	return;
 	// FIXME refactor
 
-	int idx = 0;
-	MultidimArray<double> Mcorr;
-	Mcorr.resizeNoCopy(newYdim, newXdim);
-	Mcorr.setXmippOrigin();
-	CorrelationAux aux;
-	for (size_t i = 0; i < N - 1; ++i) {
-		for (size_t j = i + 1; j < N; ++j) {
-			bestShift(*frameFourier[i], *frameFourier[j], Mcorr, bX(idx),
-					bY(idx), aux, NULL, maxShift);
-			if (verbose)
-				std::cerr << "Frame " << i + nfirst << " to Frame "
-						<< j + nfirst << " -> (" << bX(idx) << "," << bY(idx)
-						<< ")\n";
-			for (int ij = i; ij < j; ij++)
-				A(idx, ij) = 1;
-
-			idx++;
-		}
-		delete frameFourier[i];
-	}
+//	int idx = 0;
+//	MultidimArray<double> Mcorr;
+//	Mcorr.resizeNoCopy(newYdim, newXdim);
+//	Mcorr.setXmippOrigin();
+//	CorrelationAux aux;
+//	for (size_t i = 0; i < N - 1; ++i) {
+//		for (size_t j = i + 1; j < N; ++j) {
+//			bestShift(*frameFourier[i], *frameFourier[j], Mcorr, bX(idx),
+//					bY(idx), aux, NULL, maxShift);
+//			if (verbose)
+//				std::cerr << "Frame " << i + nfirst << " to Frame "
+//						<< j + nfirst << " -> (" << bX(idx) << "," << bY(idx)
+//						<< ")\n";
+//			for (int ij = i; ij < j; ij++)
+//				A(idx, ij) = 1;
+//
+//			idx++;
+//		}
+//		delete frameFourier[i];
+//	}
 }
