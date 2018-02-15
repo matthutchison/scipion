@@ -24,17 +24,19 @@
 # *
 # **************************************************************************
 """
-In this module are protocol base classes related to EM imports of Micrographs, Particles, Volumes...
+In this module are protocol base classes related to EM imports of
+Micrographs, Particles, Volumes...
 """
 
 from os.path import join, exists
 
-from pyworkflow.protocol.params import IntParam, PointerParam, FloatParam, BooleanParam
+from pyworkflow.protocol.params import (IntParam, PointerParam, FloatParam,
+                                        BooleanParam)
 from pyworkflow.utils.path import removeBaseExt
 from pyworkflow.em.protocol.protocol_particles import ProtParticlePicking
-import xmipp
-        
 from base import ProtImportFiles
+
+import pyworkflow.em.metadata as md
 
 
 
@@ -119,7 +121,11 @@ class ProtImportCoordinates(ProtImportFiles, ProtParticlePicking):
         if not hasattr(self, 'outputCoordinates'):
             msg = 'Output coordinates not ready yet'
         else:
-            msg = "%s  coordinates from micrographs %s were imported using %s format."%(self.outputCoordinates.getSize(), self.getObjectTag('inputMicrographs'), self._getImportChoices()[self.getImportFrom()])
+            msg = ("%s  coordinates from micrographs %s were imported using "
+                   "%s format."%(self.outputCoordinates.getSize(),
+                                 self.getObjectTag('inputMicrographs'),
+                                 self._getImportChoices()[self.getImportFrom()]))
+            
             if self.scale.get() != 1.:
                 msg += " Scale factor %0.2f was applied." % self.scale
             if self.invertX.get():
@@ -128,7 +134,8 @@ class ProtImportCoordinates(ProtImportFiles, ProtParticlePicking):
                 msg += " Y coordinate was inverted."
 
             summary.append(msg)
-            summary.append("Output coordinates: %s." % self.getObjectTag('outputCoordinates'))
+            summary.append("Output coordinates: %s."
+                           % self.getObjectTag('outputCoordinates'))
         return summary
 
     def _methods(self):
@@ -230,9 +237,10 @@ class ProtImportCoordinates(ProtImportFiles, ProtParticlePicking):
             configfile = join(self.filesPath.get(), 'config.xmd')
             existsConfig = exists(configfile)
             if existsConfig:
-                md = xmipp.MetaData('properties@' + configfile)
-                configobj = md.firstObject()
-                boxSize = md.getValue(xmipp.MDL_PICKING_PARTICLE_SIZE, configobj)
+                mdConf = md.MetaData('properties@' + configfile)
+                configobj = mdConf.firstObject()
+                boxSize = mdConf.getValue(md.MDL_PICKING_PARTICLE_SIZE,
+                                          configobj)
         if importFrom == ProtImportCoordinates.IMPORT_FROM_EMAN:
             # Read the boxSize from the e2boxercache/base.json
             jsonFnbase = join(self.filesPath.get(), 'e2boxercache', 'base.json')
