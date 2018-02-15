@@ -67,17 +67,18 @@ class ProtImportCoordinates(ProtImportFiles, ProtParticlePicking):
         """
         return True
     
-    #--------------------------- DEFINE param functions --------------------------------------------
+    #--------------------------- DEFINE param functions ------------------------
     def _defineParams(self, form):
 
 
         ProtImportFiles._defineParams(self, form)
 
     def _defineImportParams(self, form):
-        form.addParam('inputMicrographs', PointerParam, pointerClass='SetOfMicrographs',
-                          label='Input micrographs',
-                          help='Select the micrographs for which you want to import coordinates.')
-
+        form.addParam('inputMicrographs', PointerParam,
+                      pointerClass='SetOfMicrographs',
+                      label='Input micrographs',
+                      help='Select the micrographs for which you want to '
+                           'import coordinates.')
         form.addParam('boxSize', IntParam, label='Box size')
         form.addParam('scale', FloatParam,
                       label='Scale', default=1,
@@ -86,16 +87,16 @@ class ProtImportCoordinates(ProtImportFiles, ProtParticlePicking):
                       label='Invert X')
         form.addParam('invertY', BooleanParam, default=False,
                       label='Invert Y',
-                      help='Invert Y for EMAN coordinates taken on dm3 or'
-                           ' tif micrographs')
+                      help='Invert Y for EMAN coordinates taken on dm3 or '
+                           'tif micrographs')
 
-    #--------------------------- INSERT steps functions --------------------------------------------
+    #--------------------------- INSERT steps functions ------------------------
     def _insertAllSteps(self):
         importFrom = self.importFrom.get()
         self._insertFunctionStep('createOutputStep', importFrom,
                                      self.filesPath.get())
 
-    #--------------------------- STEPS functions ---------------------------------------------------
+    #--------------------------- STEPS functions -------------------------------
     def createOutputStep(self, importFrom, *args):
         inputMics = self.inputMicrographs.get()
         coordsSet = self._createSetOfCoordinates(inputMics)
@@ -114,7 +115,7 @@ class ProtImportCoordinates(ProtImportFiles, ProtParticlePicking):
         self._defineOutputs(outputCoordinates=coordsSet)
         self._defineSourceRelation(self.inputMicrographs, coordsSet)
 
-    #--------------------------- INFO functions ---------------------------------------------------
+    #--------------------------- INFO functions --------------------------------
     def _summary(self):
         summary = []
 
@@ -141,7 +142,7 @@ class ProtImportCoordinates(ProtImportFiles, ProtParticlePicking):
     def _methods(self):
         return self._summary()
     
-    #--------------------------- UTILS functions ---------------------------------------------------
+    #--------------------------- UTILS functions -------------------------------
     def getImportClass(self):
         """ Return the class in charge of importing the files. """
         filesPath = self.filesPath.get()
@@ -195,7 +196,8 @@ class ProtImportCoordinates(ProtImportFiles, ProtParticlePicking):
             coordBase = removeBaseExt(coordFile)
             for mic in micSet:
                 micBase = removeBaseExt(mic.getFileName())
-                if coordBase in micBase or micBase in coordBase: #temporal use of in
+                # temporal use of in
+                if coordBase in micBase or micBase in coordBase:
                     return mic
             return None
         else:
