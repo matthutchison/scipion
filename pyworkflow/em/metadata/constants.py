@@ -972,3 +972,5 @@ LABEL_TYPES = {
                LABEL_BOOL: bool              
                }
 
+# noise distribution
+XMIPP_RND_UNIFORM = xmipp.XMIPP_RND_UNIFORM

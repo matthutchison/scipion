@@ -31,17 +31,14 @@ from collections import OrderedDict
 import pyworkflow.protocol.params as params
 from protocol import EMProtocol
 import time
-import xmipp
 import random
 
 from pyworkflow import VERSION_1_1
-from pyworkflow.em.data import \
-    (SetOfMicrographs, Micrograph, Acquisition, Movie, SetOfMovies)
-from pyworkflow.em.data import SetOfMicrographs, Micrograph, Acquisition, Movie, SetOfMovies, SetOfParticles, Particle
+from pyworkflow.em.data import (SetOfMicrographs, Micrograph, Acquisition,
+                                Movie, SetOfMovies, SetOfParticles, Particle)
 from pyworkflow.protocol.constants import STEPS_PARALLEL
-from os.path import basename, exists
+from os.path import basename
 from pyworkflow.em.convert import ImageHandler
-from pyworkflow.utils.path import createLink
 
 SET_OF_MOVIES = 0
 SET_OF_MICROGRAPHS = 1
@@ -81,7 +78,8 @@ class ProtCreateStreamData(EMProtocol):
                                'Particles'],
                       label='set Of',
                       help='create set of')
-        form.addParam('inputMovies', params.PointerParam, pointerClass='SetOfMovies',
+        form.addParam('inputMovies', params.PointerParam,
+                      pointerClass='SetOfMovies',
                       condition="setof==%d"%SET_OF_MOVIES,
                       label="movie",
                       help='This movie will be copied "number of items" times')
@@ -287,25 +285,29 @@ class ProtCreateStreamData(EMProtocol):
         self._stepsCheck()
 
     def createRandomMicAtep(self, mic):
-        from pyworkflow.em.packages.xmipp3 import getEnviron
-
+        from pyworkflow.em import ImageHandler
+        import pyworkflow.em.metadata as md
+        
+        # from pyworkflow.em.packages.xmipp3 import getEnviron
+        
+        ih = ImageHandler()
         # create image
-        img = xmipp.Image()
-        img.setDataType(xmipp.DT_FLOAT)
+        img = ih.createImage()
+        img.setDataType(md.DT_FLOAT)
         img.resize(self.xDim, self.yDim)
-        img.initRandom(0., 1., xmipp.XMIPP_RND_UNIFORM)
+        img.initRandom(0., 1., md.XMIPP_RND_UNIFORM)
         baseFn = self._getExtraPath(self._singleImageFn)
         img.write(baseFn)
 
-        md1 = xmipp.MetaData()
+        md1 = md.MetaData()
         md1.setColumnFormat(False)
         idctf = md1.addObject()
 
         baseFnCtf = self._getTmpPath("ctf_%d.param" % mic)
         baseFnImageCTF = self._getExtraPath("imageCTF_%d.xmp" % mic)
 
-        md1.setValue(xmipp.MDL_CTF_SAMPLING_RATE, 1., idctf)
-        md1.setValue(xmipp.MDL_CTF_VOLTAGE, 200., idctf)
+        md1.setValue(md.MDL_CTF_SAMPLING_RATE, 1., idctf)
+        md1.setValue(md.MDL_CTF_VOLTAGE, 200., idctf)
         defocus = 20000 + 10000 * random.random()
         udefocus = defocus + 1000 * random.random()
         vdefocus = defocus + 1000 * random.random()
@@ -313,22 +315,18 @@ class ProtCreateStreamData(EMProtocol):
             aux = vdefocus
             vdefocus = udefocus
             udefocus = aux
-        md1.setValue(xmipp.MDL_CTF_DEFOCUSU, udefocus, idctf)
-        md1.setValue(xmipp.MDL_CTF_DEFOCUSV, vdefocus, idctf)
-        md1.setValue(xmipp.MDL_CTF_DEFOCUS_ANGLE, 180.0 * random.random(),
+        md1.setValue(md.MDL_CTF_DEFOCUSU, udefocus, idctf)
+        md1.setValue(md.MDL_CTF_DEFOCUSV, vdefocus, idctf)
+        md1.setValue(md.MDL_CTF_DEFOCUS_ANGLE, 180.0 * random.random(),
                      idctf)
-        md1.setValue(xmipp.MDL_CTF_CS, 2., idctf)
-        md1.setValue(xmipp.MDL_CTF_Q0, 0.07, idctf)
-        md1.setValue(xmipp.MDL_CTF_K, 1., idctf)
+        md1.setValue(md.MDL_CTF_CS, 2., idctf)
+        md1.setValue(md.MDL_CTF_Q0, 0.07, idctf)
+        md1.setValue(md.MDL_CTF_K, 1., idctf)
 
         md1.write(baseFnCtf)
 
         # apply ctf
-        args = " -i %s" % baseFn
-        args += " -o %s" % baseFnImageCTF
-        args += " -f ctf %s" % baseFnCtf
-        args += " --sampling %f" % self.samplingRate
-        self.runJob("xmipp_transform_filter", args, env=getEnviron())
+        ih.applyCtf(baseFn, baseFnImageCTF, baseFnCtf, self.samplingRate)
         self.dictObj[baseFnImageCTF] = True
         time.sleep(self.creationInterval.get())
 
