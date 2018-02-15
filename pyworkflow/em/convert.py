@@ -392,6 +392,12 @@ class ImageHandler(object):
                                '-i %s --select above 1 --substitute '
                                'value 1' % (outputFile))
     
+    def applyCtf(self, inputFile, outputFile, ctfMd, pxSize=1):
+        
+        self.__runXmippProgram('xmipp_transform_filter',
+                               '-i %s -o %s -f ctf %s -- sampling %f'
+                               % (inputFile, outputFile, ctfMd, pxSize))
+    
     def isImageFile(self, imgFn):
         """ Check if imgFn has an image extension. The function
         is implemented in the Xmipp binding.
