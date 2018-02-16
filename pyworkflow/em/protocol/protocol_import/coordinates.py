@@ -36,9 +36,6 @@ from pyworkflow.utils.path import removeBaseExt
 from pyworkflow.em.protocol.protocol_particles import ProtParticlePicking
 from base import ProtImportFiles
 
-import pyworkflow.em.metadata as md
-
-
 
 class ProtImportCoordinates(ProtImportFiles, ProtParticlePicking):
     """ Protocol to import a set of coordinates """
@@ -236,6 +233,8 @@ class ProtImportCoordinates(ProtImportFiles, ProtParticlePicking):
         scale = self.scale.get()
 
         if importFrom == ProtImportCoordinates.IMPORT_FROM_XMIPP:
+            import pyworkflow.em.metadata as md
+            
             configfile = join(self.filesPath.get(), 'config.xmd')
             existsConfig = exists(configfile)
             if existsConfig:
