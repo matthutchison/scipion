@@ -69,17 +69,6 @@ class XmippViewer(Viewer):
     """
     _environments = [DESKTOP_TKINTER, WEB_DJANGO]
     _targets = [
-                CoordinatesTiltPair,
-                Image,
-                MicrographsTiltPair,
-                ParticlesTiltPair,
-                SetOfClasses2D,
-                SetOfClasses3D,
-                SetOfCoordinates,
-                SetOfCTF,
-                SetOfImages,
-                SetOfMovies,
-                SetOfNormalModes,
                 SetOfPDBs,
                 XmippProtCompareReprojections,
                 XmippProtCompareAngles,
@@ -87,7 +76,6 @@ class XmippViewer(Viewer):
                 XmippProtExtractParticles,
                 XmippProtExtractParticlesPairs,
                 XmippProtKerdensom,
-                ProtParticlePicking,
                 XmippProtParticlePickingPairs,
                 XmippProtRotSpectra,
                 XmippProtScreenParticles,
@@ -100,7 +88,6 @@ class XmippViewer(Viewer):
 
     def __init__(self, **kwargs):
         Viewer.__init__(self, **kwargs)
-        self._views = []
 
     # FIXME: JMRT: I think this function is not necessary, we should remove it
     def visualize(self, obj, **kwargs):
