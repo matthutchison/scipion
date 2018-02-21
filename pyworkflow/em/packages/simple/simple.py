@@ -33,7 +33,7 @@ from pyworkflow.utils import Environ
 def getEnviron():
     """ Create the needed environment for Xmipp programs. """
     environ = Environ(os.environ)
-    SIMPLEBIN = os.path.join(os.environ['SIMPLE_HOME'], 'bin')
+    SIMPLEBIN = os.path.join(os.environ['SIMPLE_HOME'], 'build', 'bin')
     environ.update({
                     'SIMPLEBIN': SIMPLEBIN,
                     'SIMPLEPATH': os.environ['SIMPLE_HOME'],

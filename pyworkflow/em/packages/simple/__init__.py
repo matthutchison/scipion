@@ -35,7 +35,21 @@ from simple import *
 
 
 _environ = getEnviron()
+SIMPLE = "simple"
 
-# from viewer import *
+
 from protocol_prime import ProtPrime
+from protocol_prime2D import ProtPrime2D
+from pyworkflow.utils import commandExists
 
+def validateInstallation():
+    """ This function is used to check if SIMPLE is properly installed. """
+    missingPaths = []
+
+    if not (commandExists(SIMPLE)):
+        missingPaths.append("%s not found in the system" % SIMPLE)
+
+    if missingPaths:
+        return ["Missing variables:"] + missingPaths
+    else:
+        return [] # No errors
