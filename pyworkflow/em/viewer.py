@@ -33,7 +33,7 @@ import shlex
 import socket
 import sys
 from multiprocessing.connection import Client
-from numpy import flipud
+from numpy import flipud, rad2deg
 from threading import Thread
 
 try:  # python 2
@@ -46,22 +46,25 @@ except ImportError:  # Python 3
     import tkinter.ttk as ttk
 
 import pyworkflow as pw
+import pyworkflow.em.transformations as trans
 from pyworkflow.em.constants import *
-from pyworkflow.em import ImageHandler, OrderedDict
-from pyworkflow.viewer import View, Viewer, CommandView, DESKTOP_TKINTER, ProtocolViewer
+from pyworkflow.em.viewers.chimera_utils import (adaptOriginFromCCP4ToChimera,
+                                                 getChimeraEnviron,
+                                                 createCoordinateAxisFile)
+
+from pyworkflow.viewer import (View, Viewer, CommandView,
+                               DESKTOP_TKINTER, ProtocolViewer)
 from pyworkflow.utils import Environ, runJob
 from pyworkflow.utils import getFreePort
 from pyworkflow.gui.matplotlib_image import ImageWindow
 
 # From pyworkflow.em level
+import data as data
+import data_tiltpairs as datatp
 import showj
 import metadata as md
-from data import PdbFile
 from convert import ImageHandler
-from pyworkflow.em.viewers.chimera_utils import \
-    adaptOriginFromCCP4ToChimera, getChimeraEnviron,  createCoordinateAxisFile
 
-import xmipp
 
 from viewer_fsc import FscViewer
 from viewer_pdf import PDFReportViewer
@@ -313,29 +316,6 @@ class ImageView(View):
 
     def getImagePath(self):
         return self._imagePath
-# TODO: delete class TextFileView
-        '''
-class TextFileView(View):
-
-    def __init__(self, path, tkRoot):
-        self.path = path
-        self.tkRoot=tkRoot#message box will be painted ABOVE this window
-
-    def show(self):
-        """Show text file in default editor, If file does not exists return
-        error message"""
-        if not os.path.isfile(self.path):
-            tkMessageBox.showerror("Refamc Viewer Error",#bar title
-                                   "refmac log file not found\n(%s)"
-                                   % self.path,#message
-                                   parent=self.tkRoot)
-            return
-        editor = os.getenv('EDITOR')
-        if editor:
-            os.system(editor + ' ' + self.path)
-        else:
-            webbrowser.open(self.path)
-'''
 
 
 class TableView(View):
@@ -465,8 +445,6 @@ class TableView(View):
             # xsb.grid(row=2, column=0, sticky='ew')
 
 # ------------------------ Some views and  viewers ------------------------
-
-
 class ChimeraView(CommandView):
     """ View for calling an external command. """
     def __init__(self, inputFile, **kwargs):
@@ -508,14 +486,14 @@ class ChimeraDataView(ChimeraClientView):
 class ChimeraViewer(Viewer):
     """ Wrapper to visualize PDB object with Chimera. """
     _environments = [DESKTOP_TKINTER]
-    _targets = [PdbFile]
+    _targets = [data.PdbFile]
 
     def __init__(self, **kwargs):
         Viewer.__init__(self, **kwargs)
 
     def visualize(self, obj, **kwargs):
         cls = type(obj)
-        if issubclass(cls, PdbFile):
+        if issubclass(cls, data.PdbFile):
             # if attribute _chimeraScript exists then protocol
             # has create a script file USE IT
             if hasattr(obj, '_chimeraScript'):
@@ -554,6 +532,13 @@ class ChimeraViewer(Viewer):
                 f.write("open %s\n" % os.path.abspath(fn))
                 f.close()
                 ChimeraView(fnCmd).show()
+
+        if issubclass(cls, data.PdbFile):
+            fn = obj.getFileName()
+            if obj.getPseudoAtoms():
+                if hasattr(obj, '_chimeraScript'):
+                    fn = obj._chimeraScript.get()
+            ChimeraView(fn).show()
             # FIXME: there is an asymmetry between ProtocolViewer and Viewer
             # for the first, the visualize method return a list of View's
             # (that are shown)
@@ -565,7 +550,6 @@ class ChimeraViewer(Viewer):
 
 
 class ChimeraClient:
-
     def openVolumeOnServer(self, volume, sendEnd=True):
         self.send('open_volume', volume)
         if self.voxelSize is not None:
@@ -618,7 +602,6 @@ class ChimeraClient:
             self.listen_thread.start()
 
     def listen(self):
-
         self.listen = True
         try:
             while self.listen:
@@ -633,7 +616,8 @@ class ChimeraClient:
         self.client.close()
 
     def initVolumeData(self):
-        self.image = xmipp.Image(self.volfile)
+        ih = ImageHandler()
+        self.image = ih.read(self.volfile)
         self.image.convert2DataType(md.DT_DOUBLE)
         self.xdim, self.ydim, self.zdim, self.n = self.image.getDimensions()
         self.vol = self.image.getData()
@@ -644,7 +628,6 @@ class ChimeraClient:
 
 
 class ChimeraAngDistClient(ChimeraClient):
-
     def __init__(self, volfile, **kwargs):
         self.angularDistFile = kwargs.get('angularDistFile', None)
 
@@ -718,7 +701,6 @@ class ChimeraAngDistClient(ChimeraClient):
 
 
 class ChimeraVirusClient(ChimeraClient):
-
     def __init__(self, volfile, **kwargs):
         self.h = kwargs.get('h', 5)
         if self.h is None:
@@ -802,7 +784,9 @@ class ChimeraVirusClient(ChimeraClient):
             printCmd('reading motion')
             self.motion = data
             printCmd('getting euler angles')
-            rot, tilt, psi = xmipp.Euler_matrix2angles(self.motion)
+            rot, tilt, psi = -rad2deg(trans.euler_from_matrix(self.motion,
+                                                              axes='szyz'))
+            # rot, tilt, psi = xmipp.Euler_matrix2angles(self.motion)
             printCmd('calling rotate')
             self.rotate(rot, tilt, psi)
         elif msg == 'id':
@@ -841,11 +825,11 @@ class ChimeraVirusClient(ChimeraClient):
 
 
 class ChimeraProjectionClient(ChimeraAngDistClient):
-
     def __init__(self, volfile, **kwargs):
         print("on chimera projection client")
         ChimeraAngDistClient.__init__(self, volfile, **kwargs)
-        self.projection = xmipp.Image()
+        ih = ImageHandler()
+        self.projection = ih.createImage()
         self.projection.setDataType(md.DT_DOUBLE)
         # 0.5 ->  Niquiest frequency
         # 2 -> bspline interpolation
@@ -1060,7 +1044,7 @@ class VmdViewer(Viewer):
     def visualize(self, obj, **args):
         cls = type(obj)
 
-        if issubclass(cls, PdbFile):
+        if issubclass(cls, data.PdbFile):
             VmdView(obj.getFileName()).show()
             # FIXME: there is an asymetry between ProtocolViewer and Viewer.
             # For the first, the visualize method return a list of View's,
@@ -1069,3 +1053,189 @@ class VmdViewer(Viewer):
         else:
             raise Exception('VmdViewer.visualize: can not visualize class: %s'
                             % obj.getClassName())
+
+
+class ViewerEm(Viewer):
+    """ A Viewer will provide several Views to visualize
+    the data associated to data objects or protocol.
+
+    The _targets class property should contains a list of string
+    with the class names that this viewer is able to visualize.
+    For example: _targets = ['Image', 'SetOfImages']
+    """
+    _environments = [DESKTOP_TKINTER]
+    _targets = [datatp.CoordinatesTiltPair,
+                datatp.MicrographsTiltPair,
+                datatp.ParticlesTiltPair,
+                data.Image,
+                data.SetOfClasses2D,
+                data.SetOfClasses3D,
+                data.SetOfCoordinates,
+                data.SetOfCTF,
+                data.SetOfImages,
+                data.SetOfMovies,
+                data.SetOfNormalModes,
+                data.SetOfPDBs
+                # ProtParticlePicking
+                ]
+    def __init__(self, **kwargs):
+        Viewer.__init__(self, **kwargs)
+        self._views = []
+        
+    def _visualize(self, obj, **kwargs):
+        """ This method should make the necessary convertions
+        and return the list of Views that will be used to
+        visualize the object
+        """
+        views = []
+        cls = type(obj)
+        
+        def getImageLocation(obj):
+            return ImageHandler.locationToXmipp(obj)
+        
+        if issubclass(cls, data.Volume):
+            fn = getImageLocation(obj)
+            views.append(ObjectView(self._project, obj.strId(), fn,
+                                    viewParams={showj.RENDER: 'image',
+                                                showj.SAMPLINGRATE:
+                                                    obj.getSamplingRate()}))
+        
+        elif issubclass(cls, data.Image):
+            fn = getImageLocation(obj)
+            views.append(ObjectView(self._project, obj.strId(), fn))
+
+        elif issubclass(cls, data.SetOfPDBs):
+            fn = obj.getFileName()
+            labels = 'id _filename '
+            self._views.append(ObjectView(self._project, obj.strId(), fn,
+                                          viewParams={ORDER: labels,
+                                                      VISIBLE: labels,
+                                                      MODE: MODE_MD, RENDER: "no"}))
+
+        elif issubclass(cls, data.SetOfNormalModes):
+            fn = obj.getFileName()
+            from nma.viewer_nma import OBJCMD_NMA_PLOTDIST, OBJCMD_NMA_VMD
+            objCommands = "'%s' '%s'" % (OBJCMD_NMA_PLOTDIST, OBJCMD_NMA_VMD)
+            views.append(ObjectView(self._project, self.protocol.strId(),
+                                    fn, obj.strId(),
+                                    viewParams={OBJCMDS: objCommands},
+                                    **kwargs))
+        
+        elif issubclass(cls, data.SetOfMovies):
+            fn = obj.getFileName()
+            # Enabled for the future has to be available
+            labels = 'id _filename _samplingRate  '
+            views.append(ObjectView(self._project, obj.strId(), fn,
+                                    viewParams={ORDER: labels,
+                                                VISIBLE: labels,
+                                                MODE: MODE_MD,
+                                                RENDER: "no"}))
+        
+        elif issubclass(cls, data.SetOfMicrographs):
+            views.append(MicrographsView(self._project, obj, **kwargs))
+        
+        elif issubclass(cls, datatp.MicrographsTiltPair):
+            labels = 'id enabled _untilted._filename _tilted._filename'
+            views.append(
+                ObjectView(self._project, obj.strId(), obj.getFileName(),
+                           viewParams={ORDER: labels,
+                                       VISIBLE: labels,
+                                       MODE: MODE_MD,
+                                       RENDER: '_untilted._filename _tilted._filename'}))
+        
+        elif issubclass(cls, data.SetOfCoordinates):
+            micSet = obj.getMicrographs()  # accessing mics to provide metadata file
+            if micSet is None:
+                raise Exception(
+                    'visualize: SetOfCoordinates has no micrographs set.')
+            
+            mdFn = getattr(micSet, '_xmippMd', None)
+            if mdFn:
+                fn = mdFn.get()
+            else:  # happens if protocol is not an xmipp one
+                fn = self._getTmpPath(micSet.getName() + '_micrographs.xmd')
+                writeSetOfMicrographs(micSet, fn)
+            tmpDir = self._getTmpPath(obj.getName())
+            cleanPath(tmpDir)
+            makePath(tmpDir)
+            # FIXME: (JMRT) We are always writing the SetOfCoordinates and removing
+            # the tmpDir, we need to take into account if the user have pick
+            # some particles in the tmpDir and have not save them, that now
+            # will loose all picked particles.
+            # A possible solution could be to alert that changes have not been
+            # written during modification of tmpDir or create a new Xmipp picking
+            # protocol to continue picking later without loosing the coordinates.
+            writeSetOfCoordinates(tmpDir, obj)
+            views.append(CoordinatesObjectView(self._project, fn, tmpDir,
+                                               self.protocol,
+                                               inTmpFolder=True))
+        
+        elif issubclass(cls, data.SetOfParticles):
+            fn = obj.getFileName()
+            labels = 'id enabled _index _filename _xmipp_zScore _xmipp_cumulativeSSNR _sampling _xmipp_scoreEmptiness '
+            labels += '_ctfModel._defocusU _ctfModel._defocusV _ctfModel._defocusAngle _transform._matrix'
+            views.append(ObjectView(self._project, obj.strId(), fn,
+                                    viewParams={showj.ORDER: labels,
+                                                showj.VISIBLE: labels,
+                                                'sortby': '_xmipp_zScore asc',
+                                                showj.RENDER: '_filename'}))
+        
+        elif issubclass(cls, data.SetOfVolumes):
+            fn = obj.getFileName()
+            labels = 'id enabled comment _filename '
+            views.append(ObjectView(self._project, obj.strId(), fn,
+                                    viewParams={MODE: MODE_MD,
+                                                ORDER: labels,
+                                                VISIBLE: labels,
+                                                RENDER: '_filename'}))
+        
+        elif issubclass(cls, data.SetOfClasses2D):
+            fn = obj.getFileName()
+            views.append(
+                ClassesView(self._project, obj.strId(), fn, **kwargs))
+        
+        elif issubclass(cls, data.SetOfClasses3D):
+            fn = obj.getFileName()
+            views.append(Classes3DView(self._project, obj.strId(), fn))
+        
+        elif issubclass(cls, data.SetOfImages):
+            fn = obj.getFileName()
+            views.append(
+                ObjectView(self._project, obj.strId(), fn, **kwargs))
+        
+        elif issubclass(cls, data.SetOfCTF):
+            views.append(CtfView(self._project, obj))
+
+        elif issubclass(cls, datatp.ParticlesTiltPair):
+            labels = 'id enabled _untilted._filename _tilted._filename'
+            views.append(
+                ObjectView(self._project, obj.strId(), obj.getFileName(),
+                           viewParams={ORDER: labels,
+                                       VISIBLE: labels,
+                                       RENDER: '_untilted._filename _tilted._filename',
+                                       MODE: MODE_MD}))
+
+        elif issubclass(cls, datatp.CoordinatesTiltPair):
+            tmpDir = self._getTmpPath(obj.getName())
+            makePath(tmpDir)
+            
+            mdFn = join(tmpDir, 'input_micrographs.xmd')
+            writeSetOfMicrographsPairs(obj.getUntilted().getMicrographs(),
+                                       obj.getTilted().getMicrographs(),
+                                       mdFn)
+            parentProtId = obj.getObjParentId()
+            parentProt = self.getProject().mapper.selectById(parentProtId)
+            extraDir = parentProt._getExtraPath()
+            
+            #           extraDir = parentProt._getExtraPath()
+            # TODO: Review this if ever a non Xmipp CoordinatesTiltPair is available
+            writeSetOfCoordinates(tmpDir, obj.getUntilted())
+            writeSetOfCoordinates(tmpDir, obj.getTilted())
+            launchTiltPairPickerGUI(mdFn, tmpDir, self.protocol)
+        
+        elif issubclass(cls, ProtParticlePicking):
+            if obj.getOutputsSize() >= 1:
+                coordsSet = obj.getCoords()
+                self._visualize(coordsSet)
+        
+        return views
